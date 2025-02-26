@@ -46,6 +46,14 @@
 #include <toaru/list.h>
 #include <toaru/text.h>
 
+// #define SHADOW_OFFSET 5
+// #define SHADOW_RADIUS 10
+// #define SHADOW_COLOR premultiply(rgba(0,0,0, 50))
+// #ifndef YUTANI_WINDOW_FLAG_NO_SHADOW
+// #define YUTANI_WINDOW_FLAG_NO_SHADOW (1 << 13)
+// #endif
+
+
 #define _DEBUG_YUTANI
 #ifdef _DEBUG_YUTANI
 #include <toaru/trace.h>
@@ -553,6 +561,20 @@ static void mark_screen(yutani_globals_t * yg, int32_t x, int32_t y, int32_t wid
 	list_insert(yg->update_list, rect);
 }
 
+
+// static void draw_rounded_rectangle_shadow(gfx_context_t * ctx, int x, int y, int w, int h, int r, uint32_t color) {
+//     for (int i = 0; i < r; ++i) {
+//         float alpha = (float)(r - i) / (float)r * (float)_ALP(color);
+//         uint32_t c = rgba(_RED(color), _GRE(color), _BLU(color), (uint8_t)alpha);
+//         draw_rounded_rectangle(ctx, x + i, y + i, w - 2*i, h - 2*i, r - i, premultiply(c));
+//     }
+// }
+
+
+// static void draw_simple_shadow(gfx_context_t * ctx, int x, int y, int w, int h, uint32_t color) {
+//     draw_rectangle(ctx, x, y, w, h, color);
+// }
+
 /**
  * Draw the cursor sprite.
  */
@@ -699,20 +721,21 @@ int yutani_window_is_bottom(yutani_globals_t * yg, yutani_server_window_t * wind
  */
 uint32_t yutani_color_for_wid(yutani_wid_t wid) {
 	static uint32_t colors[] = {
-		0xFF19aeff,
-		0xFFff4141,
-		0xFFffff3e,
-		0xFFff6600,
-		0xFF9ade00,
-		0xFFd76cff,
-		0xFF364e59,
-		0xFF0084c8,
-		0xFFdc0000,
-		0xFFff9900,
-		0xFF009100,
-		0xFFba00ff,
-		0xFFb88100,
-		0xFF9eabb0
+		0xFF1E90FF, // Dodger Blue – bright primary blue
+0xFF64B5F6, // Light Blue 400 – a soft, mid‐tone blue
+0xFF4DD0E1, // Cyan 300 – a vibrant cyan accent
+0xFF1565C0, // Blue 800 – a deep, rich blue
+0xFF607D8B, // Blue Gray 500 – a neutral, muted blue-gray
+0xFF5C6BC0, // Indigo 400 – a moderate blue with a hint of violet
+0xFFBBDEFB, // Light Blue 100 – a pale, almost pastel blue for highlights
+0xFF0D47A1, // Blue 900 – very deep, almost navy blue
+0xFF0097A7, // Teal 500 – a cool blue-green accent
+0xFF1976D2, // Blue 700 – a solid, mid-to-dark blue
+0xFF81D4FA, // Light Blue A200 – an airy, very light blue
+0xFF42A5F5, // Blue 500 – a balanced, medium blue
+0xFF283593, // Indigo 900 – a dark navy tone
+0xFF90A4AE  // Blue Gray 400 – a cool, neutral gray with blue hints
+
 	};
 	int i = wid % (sizeof(colors) / sizeof(uint32_t));
 	return colors[i];
@@ -769,6 +792,29 @@ static int yutani_blit_window(yutani_globals_t * yg, yutani_server_window_t * wi
 	_win_sprite.blank = 0;
 	_win_sprite.alpha = ALPHA_EMBEDDED;
 
+	// if (!window->hidden && !window->minimized) {
+	// 	/* Clear the area where the shadow will be drawn */
+	// 	gfx_context_t * ctx = yg->backend_ctx;
+	// 	draw_rectangle(ctx,
+	// 		x - SHADOW_OFFSET,
+	// 		y - SHADOW_OFFSET,
+	// 		window->width + SHADOW_OFFSET * 2,
+	// 		window->height + SHADOW_OFFSET * 2,
+	// 		rgba(0, 0, 0, 0)); // Clear with transparent color
+	
+	// 	/* Draw shadow */
+	// 	if (window != yg->bottom_z && !(window->server_flags & YUTANI_WINDOW_FLAG_NO_SHADOW)) {
+	// 		draw_simple_shadow(ctx,
+	// 			x - SHADOW_OFFSET, y - SHADOW_OFFSET,
+	// 			window->width + SHADOW_OFFSET * 2,
+	// 			window->height + SHADOW_OFFSET * 2,
+	// 			SHADOW_COLOR);
+	// 	}
+	
+		/* Draw the actual window */
+	// 	draw_sprite(ctx, &_win_sprite, x, y);
+	// }
+	
 	double opacity = (double)(window->opacity) / 255.0;
 
 	if (window->rotation || window == yg->resizing_window || window->anim_mode || (window->server_flags & YUTANI_WINDOW_FLAG_BLUR_BEHIND)) {
@@ -826,6 +872,7 @@ static int yutani_blit_window(yutani_globals_t * yg, yutani_server_window_t * wi
 					case YUTANI_EFFECT_MINIMIZE:
 						{
 							frame = yutani_animation_lengths[window->anim_mode] - frame;
+							
 						} /* fallthrough */
 					case YUTANI_EFFECT_UNMINIMIZE:
 						{
@@ -833,11 +880,18 @@ static int yutani_blit_window(yutani_globals_t * yg, yutani_server_window_t * wi
 							opacity *= time_diff;
 							double t_x = -(window->x - window->icon_x) * (1.0 - time_diff);
 							double t_y = -(window->y - window->icon_y) * (1.0 - time_diff);
-							double s_x = 1.0 + (((float)window->icon_w / (float)(window->width ?: 1.0)) - 1.0) * (1.0 - time_diff);
-							double s_y = 1.0 + (((float)window->icon_h / (float)(window->height ?: 1.0)) - 1.0) * (1.0 - time_diff);
+							double bounce = sin(time_diff * M_PI * 2) * 0.05; // Small oscillation
+							double s_x = 1.0 + (((float)window->icon_w / (float)(window->width ?: 1.0)) - 1.0 + bounce) * (1.0 - time_diff);
+							double s_y = 1.0 + (((float)window->icon_h / (float)(window->height ?: 1.0)) - 1.0 + bounce) * (1.0 - time_diff);
+							#ifdef ENABLE_BLUR_BEHIND
+							if (window->server_flags & YUTANI_WINDOW_FLAG_BLUR_BEHIND) {
+								extern void draw_sprite_transform_blur(gfx_context_t * ctx, gfx_context_t * blur_ctx, const sprite_t * sprite, gfx_matrix_t matrix, float alpha, uint8_t threshold);
+								draw_sprite_transform_blur(yg->backend_ctx, blur_ctx, &_win_sprite, m, opacity, window->alpha_threshold);
+							}							
+							#endif
 							gfx_matrix_translate(m, t_x, t_y);
 							gfx_matrix_scale(m, s_x, s_y);
-							apply_rotation(yg, window, m, window->rotation * time_diff);
+							apply_rotation(yg, window, m, window->rotation + time_diff * 360);
 						}
 						break;
 					default:
@@ -877,7 +931,7 @@ static int yutani_blit_window(yutani_globals_t * yg, yutani_server_window_t * wi
 		yutani_window_to_device(window, 0, window->height, &r_x, &r_y);
 		yutani_window_to_device(window, window->width, 0, &q_x, &q_y);
 
-		uint32_t x = alpha_blend(rgba(0,0,0,0), yutani_color_for_wid(window->wid), rgb(178,0,0));
+		uint32_t x = alpha_blend(rgba(33,123,196,0), yutani_color_for_wid(window->wid), rgb(0,0,178));
 
 		struct TT_Contour * contour = tt_contour_start(t_x,t_y);
 		contour = tt_contour_line_to(contour, r_x,r_y);
@@ -1463,7 +1517,8 @@ static void window_finish_minimize(yutani_globals_t * yg, yutani_server_window_t
 	}
 
 	list_insert(yg->minimized_zs, w);
-
+	// Mark the entire screen as damaged to force redraw
+    // mark_screen(yg, 0, 0, yg->width, yg->height);
 	notify_subscribers(yg);
 }
 
@@ -1573,6 +1628,26 @@ static void notify_subscribers(yutani_globals_t * yg) {
 	}
 }
 
+// static void window_move(yutani_globals_t * yg, yutani_server_window_t * window, int new_x, int new_y) {
+//     /* Mark the old position (including shadow) as damaged */
+//     mark_screen(yg,
+//         window->x - SHADOW_OFFSET,
+//         window->y - SHADOW_OFFSET,
+//         window->width + SHADOW_OFFSET * 2,
+//         window->height + SHADOW_OFFSET * 2);
+
+//     /* Update to the new position */
+//     window->x = new_x;
+//     window->y = new_y;
+
+//     /* Mark the new position (including shadow) as damaged */
+//     mark_screen(yg,
+//         new_x - SHADOW_OFFSET,
+//         new_y - SHADOW_OFFSET,
+//         window->width + SHADOW_OFFSET * 2,
+//         window->height + SHADOW_OFFSET * 2);
+// }
+
 static void window_move(yutani_globals_t * yg, yutani_server_window_t * window, int x, int y) {
 	mark_window(yg, window);
 	window->x = x;
@@ -1583,6 +1658,7 @@ static void window_move(yutani_globals_t * yg, yutani_server_window_t * window, 
 	yutani_msg_buildx_window_move(response, window->wid, x, y);
 	pex_send(yg->server, window->owner, response->size, (char *)response);
 }
+
 
 /**
  * Move and resize a window to fit a particular tiling pattern.
@@ -1941,6 +2017,7 @@ static void mouse_stop_drag(yutani_globals_t * yg) {
 
 static void mouse_start_drag(yutani_globals_t * yg, yutani_server_window_t * w) {
 	if (yg->mouse_state == YUTANI_MOUSE_STATE_RESIZING || yg->mouse_state == YUTANI_MOUSE_STATE_ROTATING) return; /* Refuse */
+	
 	set_focused_at(yg, yg->mouse_x / MOUSE_SCALE, yg->mouse_y / MOUSE_SCALE);
 	if (!w) {
 		yg->mouse_window = get_focused(yg);
