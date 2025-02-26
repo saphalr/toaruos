@@ -55,7 +55,7 @@
 /* Height of the panel window */
 #define PANEL_HEIGHT 27
 /* How far down dropdown menus should be shown */
-#define DROPDOWN_OFFSET PANEL_HEIGHT
+#define DROPDOWN_OFFSET (height - PANEL_HEIGHT)
 /* How much padding should be assured on the left and right of the screen for menus */
 #define MENU_PAD 4
 
@@ -117,23 +117,23 @@ static int center_x_a2(int x) {
 static volatile int _continue = 1;
 
 static void toggle_hide_panel(void) {
-	static int panel_hidden = 0;
+    static int panel_hidden = 0;
 
-	if (panel_hidden) {
-		/* Unhide the panel */
-		for (int i = PANEL_HEIGHT-1; i >= 0; i--) {
-			yutani_window_move(yctx, panel, 0, -i);
-			usleep(3000);
-		}
-		panel_hidden = 0;
-	} else {
-		/* Hide the panel */
-		for (int i = 1; i <= PANEL_HEIGHT-1; i++) {
-			yutani_window_move(yctx, panel, 0, -i);
-			usleep(3000);
-		}
-		panel_hidden = 1;
-	}
+    if (panel_hidden) {
+        // Unhide: move from bottom of screen to original position
+        for (int i = PANEL_HEIGHT; i >= 0; i--) {
+            yutani_window_move(yctx, panel, 0, height - i);
+            usleep(3000);
+        }
+        panel_hidden = 0;
+    } else {
+        // Hide: move downward off-screen
+        for (int i = 0; i <= PANEL_HEIGHT; i++) {
+            yutani_window_move(yctx, panel, 0, (height - PANEL_HEIGHT) + i);
+            usleep(3000);
+        }
+        panel_hidden = 1;
+    }
 }
 
 /* Handle SIGINT by telling other threads (clock) to shut down */
@@ -599,7 +599,7 @@ static void update_window_list(void) {
 }
 
 static void redraw_panel_background(gfx_context_t * ctx, int width, int height) {
-	draw_fill(ctx, rgba(0,0,0,0xF2));
+	draw_fill(ctx, rgba(33,123,196,0xF2));
 }
 
 static void resize_finish(int xwidth, int xheight) {
@@ -607,6 +607,8 @@ static void resize_finish(int xwidth, int xheight) {
 
 	reinit_graphics_yutani(ctx, panel);
 	yutani_window_resize_done(yctx, panel);
+
+	yutani_window_move(yctx, panel, 0, yctx->display_height - PANEL_HEIGHT);
 
 	width = xwidth;
 
@@ -766,7 +768,9 @@ int panel_menu_show_at(struct MenuList * menu, int x) {
 
 	/* If we succeeded, move it to the final offset and display it */
 	if (menu->window) {
-		yutani_window_move_relative(yctx, menu->window, panel, offset, DROPDOWN_OFFSET);
+		int dropdown_y = (panel->y == 0) ? DROPDOWN_OFFSET : -(mheight);
+		yutani_window_move_relative(yctx, menu->window, panel, offset, dropdown_y);
+
 		yutani_flip(yctx,menu->window);
 		return 0;
 	}
@@ -804,15 +808,16 @@ int main (int argc, char ** argv) {
 	height = yctx->display_height;
 
 	panel_context.color_text_normal    = rgb(230,230,230);
-	panel_context.color_text_hilighted = rgb(142,216,255);
+	panel_context.color_text_hilighted = rgb(119, 181, 185);
 	panel_context.color_text_focused   = rgb(255,255,255);
 	panel_context.color_icon_normal    = rgb(230,230,230);
-	panel_context.color_special        = rgb(93,163,236);
+	panel_context.color_special        = rgb(88, 65, 65);
 	panel_context.font_size_default    = 14;
 	panel_context.extra_widget_spacing = 12;
 
 	/* Create the panel window */
 	panel = yutani_window_create_flags(yctx, width, PANEL_HEIGHT, YUTANI_WINDOW_FLAG_NO_STEAL_FOCUS | YUTANI_WINDOW_FLAG_ALT_ANIMATION);
+	yutani_window_move(yctx, panel, 0, height - PANEL_HEIGHT);
 	panel_context.basewindow = panel;
 
 	/* And move it to the top layer */
@@ -916,6 +921,7 @@ int main (int argc, char ** argv) {
 							width = mw->display_width;
 							height = mw->display_height;
 							yutani_window_resize(yctx, panel, mw->display_width, PANEL_HEIGHT);
+							yutani_window_move(yctx, panel, 0, height - PANEL_HEIGHT);
 						}
 						break;
 					case YUTANI_MSG_RESIZE_OFFER:
